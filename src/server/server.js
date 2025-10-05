@@ -1,85 +1,53 @@
-import express from "express";
-import { createServer } from "http";
+import { Game } from "../engine/index.js";
 import { Server } from "socket.io";
-import path from "path";
-import { fileURLToPath, pathToFileURL } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const io = new Server(3000, { cors: { origin: "*" } });
+const rooms = new Map();
 
-const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*" } });
-
-app.use(express.static(path.join(__dirname, "../client")));
-
-import { NikoJadiEngine } from "../engine/index.js";
-
-// --- Game rooms
-const games = new Map(); // roomCode -> { engine, players }
-
-// --- Helper
-function createRoom(roomCode, players) {
-  const engine = new NikoJadiEngine(players);
-  games.set(roomCode, { engine, players });
-  return games.get(roomCode);
-}
-
-// --- Socket events
 io.on("connection", (socket) => {
-  console.log(`🧩 ${socket.id} connected`);
+  console.log("🟢 New connection:", socket.id);
 
-  socket.on("createRoom", ({ roomCode, playerId }) => {
-    const game = createRoom(roomCode, [playerId]);
-    socket.join(roomCode);
-    io.to(roomCode).emit("state", game.engine.state);
-    console.log(`🎮 Room created: ${roomCode} by ${playerId}`);
+  socket.on("createRoom", (code) => {
+    const game = new Game();
+    game.addPlayer(socket.id);
+    rooms.set(code, game);
+    socket.join(code);
+    socket.emit("roomCreated", code);
+    console.log("✅ Room created:", code);
   });
 
-  socket.on("joinRoom", ({ roomCode, playerId }) => {
-    const game = games.get(roomCode);
-    if (!game) {
-      socket.emit("error", "Room not found");
-      return;
-    }
-    if (!game.players.includes(playerId)) {
-      game.players.push(playerId);
-      game.engine.state.hands[playerId] = game.engine.state.deck.splice(0, 5);
-      game.engine.state.nikoDeclared[playerId] = false;
-    }
-    socket.join(roomCode);
-    io.to(roomCode).emit("state", game.engine.state);
-    console.log(`👥 ${playerId} joined room ${roomCode}`);
+  socket.on("joinRoom", (code) => {
+    const game = rooms.get(code);
+    if (!game) return socket.emit("error", "Room not found");
+    game.addPlayer(socket.id);
+    socket.join(code);
+    socket.emit("roomJoined", code);
+    console.log("👥", socket.id, "joined", code);
   });
 
-  socket.on("move", ({ roomCode, playerId, card }) => {
-    const game = games.get(roomCode);
+  socket.on("startGame", (code) => {
+    const game = rooms.get(code);
     if (!game) return;
-    const result = game.engine.processMove(playerId, { type: "play", card });
-    io.to(roomCode).emit("state", game.engine.state);
+    game.start();
+    io.to(code).emit("startGame", game.players[0].hand);
+    console.log("🎮 Game started in room", code);
   });
 
-  socket.on("declareNiko", ({ roomCode, playerId }) => {
-    const game = games.get(roomCode);
+  socket.on("playCard", ({ room, card }) => {
+    const game = rooms.get(room);
     if (!game) return;
-    game.engine.processMove(playerId, { type: "declare" });
-    io.to(roomCode).emit("state", game.engine.state);
-  });
-
-  socket.on("resetRoom", ({ roomCode }) => {
-    const game = games.get(roomCode);
-    if (!game) return;
-    game.engine = new NikoJadiEngine(game.players);
-    io.to(roomCode).emit("state", game.engine.state);
+    const result = game.playCard(socket.id, card);
+    if (result.error) return socket.emit("message", result.error);
+    io.to(room).emit("stateUpdate", {
+      topCard: game.discard[game.discard.length - 1],
+      current: game.current().id,
+    });
+    console.log(`${socket.id} played ${card.color} ${card.value}`);
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ ${socket.id} disconnected`);
+    console.log("🔴 Disconnected:", socket.id);
   });
 });
 
-const PORT = 3000;
-httpServer.listen(PORT, () => {
-  console.log(`🚀 NikoJadi WebSocket server running on http://localhost:${PORT}`);
-});
-// Note: Changed NikoJadi to NikoKadi in index.html
+console.log("Server running on :3000");

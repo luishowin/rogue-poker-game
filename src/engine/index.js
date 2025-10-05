@@ -1,121 +1,74 @@
-import { canPlayCard, applyCardEffect } from "./rules.js";
-import { parseCard } from "./utils.js";
-
-export class NikoJadiEngine {
-  constructor(players = ["p1", "p2"]) {
-    this.state = {
-      players,
-      turn: 0,
-      direction: 1, // 1 = clockwise, -1 = counterclockwise
-      deck: this.generateDeck(),
-      hands: {},
-      moves: [],
-      winner: null,
-      feedStack: 0,
-      nikoDeclared: {}, // track who said "Niko kadi"
-    };
-
-    // deal 5 cards each
-    players.forEach((p) => {
-      this.state.hands[p] = this.state.deck.splice(0, 5);
-      this.state.nikoDeclared[p] = false;
-    });
+// src/engine/index.js
+export class Game {
+  constructor() {
+    this.deck = this.generateDeck();
+    this.discard = [];
+    this.players = [];
+    this.currentPlayer = 0;
+    this.direction = 1; // 1 = clockwise, -1 = reverse
+    this.started = false;
   }
 
-  /** Create a simple 52 + 2 jokers deck */
   generateDeck() {
-    const suits = ["H", "D", "C", "S"];
-    const ranks = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
-    const deck = [];
-    suits.forEach((s) => ranks.forEach((r) => deck.push(`${r}${s}`)));
-    deck.push("BJ"); // black joker
-    deck.push("RJ"); // red joker
+    const colors = ["red", "green", "blue", "yellow"];
+    const values = ["0","1","2","3","4","5","6","7","8","9","Reverse","Skip","+2"];
+    let deck = [];
+    for (const c of colors) {
+      for (const v of values) deck.push({ color: c, value: v });
+    }
+    deck.push({ color: "wild", value: "+4" });
+    deck.push({ color: "wild", value: "wild" });
     return deck.sort(() => Math.random() - 0.5);
   }
 
-  currentPlayer() {
-    return this.state.players[this.state.turn];
+  addPlayer(id) {
+    this.players.push({ id, hand: [] });
   }
 
-  getPlayerHand(p) {
-    return this.state.hands[p] || [];
-  }
-
-  getValidMoves(p) {
-    const hand = this.state.hands[p];
-    const topCard = this.state.moves.at(-1)?.card;
-    return hand.filter((c) => canPlayCard(c, topCard));
-  }
-
-  drawCard(p, n = 1) {
-    for (let i = 0; i < n && this.state.deck.length > 0; i++) {
-      this.state.hands[p].push(this.state.deck.pop());
+  start() {
+    this.started = true;
+    for (const p of this.players) {
+      p.hand = this.deck.splice(0, 7);
     }
+    this.discard.push(this.deck.pop());
   }
 
-  feedPlayer(p, n) {
-    this.drawCard(p, n);
+  current() {
+    return this.players[this.currentPlayer];
   }
 
-  processMove(player, { type, card }) {
-    if (type === "declare") {
-      this.state.nikoDeclared[player] = true;
-      return { success: true, message: "Declared Niko kadi" };
-    }
+  canPlay(card) {
+    const top = this.discard[this.discard.length - 1];
+    return (
+      card.color === top.color ||
+      card.value === top.value ||
+      card.color === "wild"
+    );
+  }
 
-    if (type !== "play") return false;
+  playCard(playerId, card) {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return { error: "Player not found" };
 
-    const hand = this.state.hands[player];
-    const topCard = this.state.moves.at(-1)?.card;
-    const valid = canPlayCard(card, topCard);
-    if (!valid) return { error: "Invalid move." };
+    const idx = player.hand.findIndex(
+      (c) => c.color === card.color && c.value === card.value
+    );
+    if (idx === -1) return { error: "Card not in hand" };
+    if (!this.canPlay(card)) return { error: "Invalid move" };
 
-    const idx = hand.indexOf(card);
-    if (idx === -1) return { error: "Card not in hand." };
+    player.hand.splice(idx, 1);
+    this.discard.push(card);
 
-    hand.splice(idx, 1);
-    this.state.moves.push({ player, card });
+    if (card.value === "Reverse") this.direction *= -1;
+    if (card.value === "Skip") this.nextPlayer();
+    this.nextPlayer();
 
-    applyCardEffect(this, player, card);
-
-    if (hand.length === 1 && !this.state.nikoDeclared[player]) {
-      console.log(`⚠️ ${player} must declare Niko kadi before next turn`);
-    }
-
-    if (hand.length === 0) {
-      if (this.state.nikoDeclared[player]) {
-        this.state.winner = player;
-      } else {
-        console.log(`🚫 ${player} forgot to declare Niko kadi!`);
-        this.drawCard(player); // penalty
-      }
-    }
-
-    this.advanceTurn();
     return { success: true };
   }
 
-  advanceTurn() {
-    const n = this.state.players.length;
-    this.state.turn = (this.state.turn + this.state.direction + n) % n;
-  }
-
-  eliminate(p) {
-    delete this.state.hands[p];
-    this.state.players = this.state.players.filter((x) => x !== p);
-    if (this.state.turn >= this.state.players.length) this.state.turn = 0;
-  }
-
-  isOver() {
-    return !!this.state.winner || this.state.players.length <= 1;
-  }
-
-  getWinner() {
-    return this.state.winner || this.state.players[0];
+  nextPlayer() {
+    const total = this.players.length;
+    this.currentPlayer =
+      (this.currentPlayer + this.direction + total) % total;
   }
 }
-export function isGameOver() {
-  // Example condition — customize for your game’s logic
-  return players.some(p => p.hand.length === 0);
-}
-
