@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NikoJadi Multiplayer</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d101a;
+      --surface: #161b26;
+      --accent: #00bfa5;
+      --text: #eee;
+    }
+
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(circle at center, var(--bg) 40%, #080a10 100%);
+      color: var(--text);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    h1 {
+      margin-top: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      padding: 0.75rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    input, button {
+      padding: 0.6rem 0.9rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    input {
+      background: #222;
+      color: #fff;
+      width: 120px;
+    }
+
+    button {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #00d9b7;
+    }
+
+    #table {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #player-hand {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      height: 180px;
+      width: 100%;
+      perspective: 1000px;
+      padding-bottom: 10px;
+    }
+
+    /* ===== Cards ===== */
+    .card {
+      width: 70px;
+      height: 100px;
+      border-radius: 12px;
+      background: white;
+      color: black;
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+      transform-origin: bottom center;
+      transition: transform 0.2s ease, bottom 0.2s ease;
+      cursor: pointer;
+      user-select: none;
+      position: absolute;
+    }
+
+    .card-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(145deg, #fafafa, #e6e6e6);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 8px;
+    }
+
+    .card.red {
+      color: #c62828;
+    }
+
+    .card .card-rank {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .card .card-suit {
+      font-size: 16px;
+      align-self: flex-end;
+    }
+
+    .card.selected {
+      transform: translateY(-40px) scale(1.05) !important;
+      z-index: 999 !important;
+    }
+
+    #output {
+      font-family: monospace;
+      font-size: 0.9rem;
+      background: #111;
+      color: #0f0;
+      padding: 0.5rem;
+      width: 90%;
+      border-radius: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>♠️ NikoJadi Multiplayer</h1>
+
+  <div id="controls">
+    <input id="roomCode" placeholder="Room code" />
+    <input id="playerId" placeholder="Your name" />
+    <button onclick="createRoom()">Create</button>
+    <button onclick="joinRoom()">Join</button>
+    <button onclick="declareNiko()">Niko Kadi</button>
+    <button onclick="resetRoom()">Reset</button>
+  </div>
+
+  <div id="table">
+    <h3>Waiting for game...</h3>
+  </div>
+
+  <div id="player-hand"></div>
+
+  <pre id="output">Disconnected...</pre>
+
+  <script>
+    const socket = io();
+    let roomCode, playerId;
+    const output = document.getElementById("output");
+    const handEl = document.getElementById("player-hand");
+
+    socket.on("connect", () => log("✅ Connected to server"));
+
+    socket.on("state", (state) => {
+      log("📡 State update received");
+      updateUI(state);
+    });
+
+    function log(msg) {
+      output.textContent += "\\n" + msg;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function createRoom() {
+      roomCode = val("roomCode");
+      playerId = val("playerId");
+      socket.emit("createRoom", { roomCode, playerId });
+    }
+
+    function joinRoom() {
+      roomCode = val("roomCode");
+      playerId = val("playerId");
+      socket.emit("joinRoom", { roomCode, playerId });
+    }
+
+    function declareNiko() {
+      socket.emit("declareNiko", { roomCode, playerId });
+    }
+
+    function resetRoom() {
+      socket.emit("resetRoom", { roomCode });
+    }
+
+    function val(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    // ===== Render Logic =====
+    function createCardElement(card) {
+      const el = document.createElement("div");
+      el.classList.add("card");
+
+      const suit = card.suit || "?";
+      const rank = card.rank || "?";
+      if (suit === "♥" || suit === "♦") el.classList.add("red");
+
+      el.innerHTML = `
+        <div class="card-inner">
+          <div class="card-rank">${rank}</div>
+          <div class="card-suit">${suit}</div>
+        </div>
+      `;
+      el.addEventListener("click", () => {
+        el.classList.toggle("selected");
+        if (el.classList.contains("selected")) {
+          socket.emit("move", { roomCode, playerId, card: rank + suit });
+        }
+      });
+      return el;
+    }
+
+    function renderPlayerHand(container, cards) {
+      container.innerHTML = "";
+      const spread = 20;
+      const center = (cards.length - 1) / 2;
+
+      cards.forEach((card, i) => {
+        const el = createCardElement(card);
+        const angle = (i - center) * spread;
+        el.style.transform = `rotate(${angle}deg)`;
+        el.style.left = `calc(50% + ${(i - center) * 60}px - 35px)`;
+        container.appendChild(el);
+      });
+    }
+
+    function updateUI(state) {
+      const me = state.players?.find(p => p.id === playerId);
+      if (!me) return;
+
+      const parsedHand = (me.hand || []).map(parseCard);
+      renderPlayerHand(handEl, parsedHand);
+    }
+
+    function parseCard(str) {
+      if (!str) return { rank: "?", suit: "?" };
+      const suit = str.slice(-1);
+      const rank = str.slice(0, -1);
+      return { rank, suit };
+    }
+  </script>
+</body>
+</html>

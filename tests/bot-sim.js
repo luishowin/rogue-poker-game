@@ -1,48 +1,60 @@
 #!/usr/bin/env node
 import { NikoJadiEngine } from "../src/engine/index.js";
 
-function getRandomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+const game = new NikoJadiEngine(["p1", "p2", "p3", "p4"]);
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+console.log("🤖 Running NikoJadi Bot Simulation...");
 
-async function simulateGame() {
-  const game = new NikoJadiEngine(["p1", "p2", "p3", "p4"]);
-  console.log("🤖 Starting NikoJadi auto-sim test\n");
+let turnCount = 0;
+const MAX_TURNS = 2000;
+const drawTracker = new Map();
 
-  let round = 1;
-  while (!game.isOver()) {
-    const currentPlayer = game.currentPlayer();
-    const hand = game.getPlayerHand(currentPlayer);
-    const validMoves = game.getValidMoves(currentPlayer);
+while (!game.isOver() && turnCount < MAX_TURNS) {
+  const currentId = game.currentPlayer();
+  const hand = game.getPlayerHand(currentId);
+  const validMoves = game.getValidMoves(currentId);
 
-    console.log(`\nRound ${round++}: ${currentPlayer}'s turn`);
-    console.log(`Hand: ${hand.join(", ")}`);
+  console.log(`\n🎮 Turn ${turnCount + 1}: ${currentId}'s turn`);
+  console.log("Hand:", hand.join(", "));
 
-    if (hand.length > 10) {
-      console.log(`💀 ${currentPlayer} eliminated (too many cards)`);
-      game.eliminate(currentPlayer);
-      continue;
-    }
+  if (validMoves.length > 0) {
+    // Bot plays the first valid card
+    const move = validMoves[0];
+    console.log(`✅ Playing ${move}`);
+    game.processMove(currentId, { type: "play", card: move });
+  } else {
+    console.log("🃏 No valid moves. Drawing one card...");
+    game.drawCard(currentId);
 
-    if (validMoves.length === 0) {
-      console.log(`🃏 ${currentPlayer} has no valid moves. Drawing...`);
-      game.drawCard(currentPlayer);
+    const draws = (drawTracker.get(currentId) || 0) + 1;
+    drawTracker.set(currentId, draws);
+
+    const newValid = game.getValidMoves(currentId);
+    if (newValid.length > 0) {
+      const move = newValid[0];
+      console.log(`✅ After drawing, playing ${move}`);
+      game.processMove(currentId, { type: "play", card: move });
     } else {
-      const move = getRandomItem(validMoves);
-      const result = game.processMove(currentPlayer, { type: "play", card: move });
-      console.log(`→ ${currentPlayer} played ${move}`, result ? "" : "(invalid)");
+      console.log("🃏 Still no valid moves after drawing. Skipping turn.");
+      drawTracker.set(currentId, 0);
+      game.advanceTurn();
     }
-
-    await delay(400); // Small delay for readability
   }
 
-  console.log("\n🏁 Game over!");
-  console.log("Winner:", game.getWinner());
-  console.dir(game.state, { depth: null });
+  turnCount++;
 }
 
-simulateGame();
+console.log("\n🏁 Game Over (or stalemate).");
+if (game.isOver()) {
+  console.log(`Winner: ${game.getWinner()}`);
+} else {
+  console.log("⚠️ Stalemate detected — max turns reached.");
+}
+
+console.log("\n📊 Final Stats:");
+for (const p of game.state.players) {
+  const hand = game.getPlayerHand(p);
+  console.log(`${p}: ${hand.length} cards left (${hand.join(", ")})`);
+}
+
+console.log(`\n🌀 Total turns played: ${turnCount}`);
