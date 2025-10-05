@@ -6,6 +6,7 @@ import { createRoom, joinRoom, startGame, playCard } from "./game/engine.js";
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
+const game = new NikoJadiEngine();
 
 let rooms = {};
 
