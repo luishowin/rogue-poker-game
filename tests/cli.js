@@ -35,12 +35,24 @@ function handleCommand(cmd, args) {
       break;
     }
 
+    case "declare": {
+  const [player] = args;
+  if (!player) {
+    console.log("Usage: declare <player>");
+  } else {
+    const result = game.processMove(player, { type: "declare" });
+    console.log("→", result);
+  }
+  break;
+}
+
+
     case "state":
       console.dir(game.state, { depth: null });
       break;
 
     case "help":
-      console.log("Commands: move, state, help, exit");
+      console.log("Commands: move, declare, state, help, exit");
       break;
 
     case "exit":

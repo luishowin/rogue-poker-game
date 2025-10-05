@@ -1,11 +1,12 @@
 {
   "name": "your-project-name",
   "version": "1.0.0",
-   "type": "module",
+  "type": "module",
   "description": "Web based poker game with server-client architecture",
   "main": "index.js",
   "scripts": {
-    "test:cli": "node tests/cli.js"
+    "test:cli": "node tests/cli.js",
+    "test:bot": "node tests/bot-sim.js"
   },
   "devDependencies": {
     "jest": "^27.0.0"
