@@ -2,218 +2,156 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>NikoKadi Multiplayer</title>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <style>
-    :root {
-      --bg: #0c0c0c;
-      --fg: #eee;
-      --accent: #ff4655;
-    }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: system-ui, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    header {
-      text-align: center;
-      padding: 1rem;
-      border-bottom: 1px solid #222;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 1rem;
-    }
-
-    #gameArea {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 1rem;
-      font-size: 1.1rem;
-      text-align: center;
-    }
-
-    #hand {
-      display: flex;
-      justify-content: center;
-      align-items: flex-end;
-      gap: 0.5rem;
-      padding: 1rem;
-      overflow-x: auto;
-      background: #111;
-      border-top: 1px solid #222;
-      min-height: 130px;
-      scroll-snap-type: x mandatory;
-    }
-
-    .card {
-      width: 80px;
-      height: 110px;
-      border-radius: 10px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-      background: #fff;
-      color: #000;
-      font-weight: bold;
-      font-size: 1.2rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 8px;
-      cursor: pointer;
-      transition: transform 0.15s ease;
-      user-select: none;
-      scroll-snap-align: center;
-    }
-
-    .card.red { background: #f44; color: #fff; }
-    .card.green { background: #3b3; color: #fff; }
-    .card.blue { background: #33f; color: #fff; }
-    .card.yellow { background: #fc3; }
-
-    .card:hover, .card:active {
-      transform: translateY(-8px);
-    }
-
-    #controls {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    input, button {
-      border: none;
-      border-radius: 5px;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.95rem;
-    }
-
-    input {
-      background: #222;
-      color: var(--fg);
-    }
-
-    button {
-      background: var(--accent);
-      color: white;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      background: #333;
-      opacity: 0.6;
-    }
-
-    #log {
-      font-size: 0.9rem;
-      opacity: 0.8;
-      text-align: center;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pee Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
 </head>
-<body>
-  <header>♠️ NikoKadi</header>
 
-  <main>
-    <div id="controls">
-      <input id="roomCode" placeholder="Room code" />
-      <input id="playerName" placeholder="Name" />
-      <button id="createBtn">Create</button>
-      <button id="joinBtn">Join</button>
-      <button id="startBtn" disabled>Start</button>
+<body class="bg-gradient-to-br from-zinc-900 to-black text-white min-h-screen flex flex-col items-center justify-start p-4">
+  <h1 class="text-3xl font-bold mt-4 mb-2 text-yellow-400">💧 Pee Game</h1>
+
+  <!-- Connection + Room Controls -->
+  <div class="w-full max-w-md bg-zinc-800 rounded-2xl p-4 shadow-lg space-y-3">
+    <div class="flex space-x-2">
+      <input id="playerName" type="text" placeholder="Your name"
+             class="flex-1 px-3 py-2 rounded-lg text-black" />
+      <button id="createRoom" class="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg font-semibold">Create</button>
+      <button id="joinRoom" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg font-semibold">Join</button>
     </div>
 
-    <div id="gameArea">
-      <div id="log">Not connected</div>
+    <input id="roomIdInput" type="text" placeholder="Room ID"
+           class="w-full px-3 py-2 rounded-lg text-black" />
+
+    <div id="roomInfo" class="hidden text-center mt-2">
+      <p class="text-sm text-gray-300">Room: <span id="roomCode"></span></p>
+      <button id="startGame" class="bg-yellow-500 hover:bg-yellow-600 mt-2 px-3 py-2 rounded-lg font-semibold hidden">Start Game</button>
+    </div>
+  </div>
+
+  <!-- Game Area -->
+  <div id="gameArea" class="hidden w-full max-w-2xl mt-6 bg-zinc-800 rounded-2xl p-4 shadow-xl">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="text-xl font-bold text-yellow-400">Room <span id="roomDisplay"></span></h2>
+      <p id="turnInfo" class="italic text-gray-300">Waiting for game to start...</p>
     </div>
 
-    <div id="hand"></div>
-  </main>
+    <div id="topCard" class="flex justify-center mb-3">
+      <div id="discard" class="border-2 border-dashed border-gray-500 w-24 h-36 flex items-center justify-center rounded-lg text-gray-400">Top Card</div>
+    </div>
+
+    <div class="flex justify-center mb-3">
+      <button id="drawCard" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg font-semibold">Draw Card</button>
+      <button id="declare" class="bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg font-semibold ml-2">Declare</button>
+    </div>
+
+    <!-- Player Hand -->
+    <div id="hand" class="flex flex-wrap justify-center gap-2 mt-4"></div>
+
+    <!-- Status -->
+    <div id="status" class="mt-4 text-center text-sm text-gray-400"></div>
+  </div>
 
   <script>
     const socket = io();
-    let roomCode = null;
-    let playerName = null;
+    let playerId = null;
+    let roomId = null;
     let hand = [];
 
-    const log = (msg) => document.getElementById("log").textContent = msg;
-    const handEl = document.getElementById("hand");
+    const playerNameInput = document.getElementById('playerName');
+    const roomIdInput = document.getElementById('roomIdInput');
+    const createBtn = document.getElementById('createRoom');
+    const joinBtn = document.getElementById('joinRoom');
+    const roomInfo = document.getElementById('roomInfo');
+    const roomCode = document.getElementById('roomCode');
+    const roomDisplay = document.getElementById('roomDisplay');
+    const startBtn = document.getElementById('startGame');
+    const gameArea = document.getElementById('gameArea');
+    const handContainer = document.getElementById('hand');
+    const discard = document.getElementById('discard');
+    const drawBtn = document.getElementById('drawCard');
+    const declareBtn = document.getElementById('declare');
+    const turnInfo = document.getElementById('turnInfo');
+    const statusText = document.getElementById('status');
 
-    // Handle connection
-    socket.on("connect", () => log("Connected ✅"));
+    createBtn.onclick = () => {
+      const name = playerNameInput.value.trim();
+      if (!name) return alert('Enter name');
+      socket.emit('createRoom', name);
+    };
 
-    socket.on("roomCreated", (code) => {
-      roomCode = code;
-      log(`Room created: ${code}`);
-      document.getElementById("startBtn").disabled = false;
+    joinBtn.onclick = () => {
+      const name = playerNameInput.value.trim();
+      const code = roomIdInput.value.trim();
+      if (!name || !code) return alert('Enter name and room ID');
+      socket.emit('joinRoom', { name, roomId: code });
+    };
+
+    startBtn.onclick = () => {
+      socket.emit('startGame', roomId);
+    };
+
+    drawBtn.onclick = () => {
+      socket.emit('drawCard', roomId);
+    };
+
+    declareBtn.onclick = () => {
+      socket.emit('declare', roomId);
+    };
+
+    // === SOCKET EVENTS ===
+    socket.on('roomCreated', data => {
+      playerId = data.playerId;
+      roomId = data.roomId;
+      roomCode.textContent = roomId;
+      roomDisplay.textContent = roomId;
+      roomInfo.classList.remove('hidden');
+      startBtn.classList.remove('hidden');
+      alert(`Room created! Share code: ${roomId}`);
     });
 
-    socket.on("roomJoined", (code) => {
-      roomCode = code;
-      log(`Joined room: ${code}`);
-      document.getElementById("startBtn").disabled = false;
+    socket.on('roomJoined', data => {
+      playerId = data.playerId;
+      roomId = data.roomId;
+      roomCode.textContent = roomId;
+      roomDisplay.textContent = roomId;
+      roomInfo.classList.remove('hidden');
+      alert('Joined room ' + roomId);
     });
 
-    socket.on("startGame", (cards) => {
-      log("Your hand:");
-      hand = cards;
+    socket.on('gameStarted', data => {
+      gameArea.classList.remove('hidden');
+      startBtn.classList.add('hidden');
+      updateGame(data);
+    });
+
+    socket.on('updateGame', data => {
+      updateGame(data);
+    });
+
+    socket.on('status', msg => {
+      statusText.textContent = msg;
+    });
+
+    function updateGame(data) {
+      hand = data.players[playerId]?.hand || [];
       renderHand();
-    });
-
-    socket.on("message", (m) => log(m));
-    socket.on("error", (err) => log("⚠️ " + err));
+      discard.textContent = data.topCard ? `${data.topCard.value} of ${data.topCard.suit}` : 'Empty';
+      turnInfo.textContent = data.turnPlayer === playerId ? 'Your turn!' : `${data.players[data.turnPlayer]?.name || 'Other'}'s turn`;
+    }
 
     function renderHand() {
-      handEl.innerHTML = "";
-      hand.forEach((c, i) => {
-        const el = document.createElement("div");
-        el.className = `card ${c.color}`;
-        el.innerHTML = `<div>${c.value}</div><div>${c.color.toUpperCase()}</div>`;
-        el.onclick = () => playCard(i);
-        handEl.appendChild(el);
+      handContainer.innerHTML = '';
+      hand.forEach((card, idx) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = "w-16 h-24 bg-white text-black rounded-lg flex flex-col justify-center items-center text-sm font-bold cursor-pointer hover:scale-105 transition";
+        cardDiv.innerHTML = `<span>${card.value}</span><span class="text-xs">${card.suit}</span>`;
+        cardDiv.onclick = () => {
+          socket.emit('playCard', { roomId, card });
+        };
+        handContainer.appendChild(cardDiv);
       });
     }
-
-    function playCard(index) {
-      const card = hand[index];
-      if (!card || !roomCode) return;
-      socket.emit("playCard", { room: roomCode, card });
-      hand.splice(index, 1);
-      renderHand();
-    }
-
-    document.getElementById("createBtn").onclick = () => {
-      roomCode = document.getElementById("roomCode").value.trim();
-      playerName = document.getElementById("playerName").value.trim();
-      socket.emit("createRoom", roomCode);
-    };
-
-    document.getElementById("joinBtn").onclick = () => {
-      roomCode = document.getElementById("roomCode").value.trim();
-      playerName = document.getElementById("playerName").value.trim();
-      socket.emit("joinRoom", roomCode);
-    };
-
-    document.getElementById("startBtn").onclick = () => {
-      if (roomCode) socket.emit("startGame", roomCode);
-    };
   </script>
 </body>
 </html>
